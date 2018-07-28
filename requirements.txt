@@ -1,0 +1,6 @@
+-Beautiful Soup
+-Pandas
+-Matplotlib
+-Tensorflow
+-SciKitLearn
+-NumPy
