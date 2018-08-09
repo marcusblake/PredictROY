@@ -1,8 +1,8 @@
 import math
 
 
-from scrapping import ROYData
-from scrapping import currentRookieData
+from scraping import ROYData
+from scraping import currentRookieData
 
 
 #Import Libraries
