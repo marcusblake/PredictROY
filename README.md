@@ -6,6 +6,7 @@
 
 	1. `chmod +x setup.sh`
 	2. `./setup.sh`
+	3. `source env/bin/activate`
 
 ####Installation
 	The file script.sh installs all of the necessary libraries and dependencies in order to scrap the necessary data to use in the algorithm as well as the libraries needed to perform the machine learning algorithm. The required libraries are listed in requirements.txt. You can install the necessary libraries with by running the following command in your terminal (it is recommended that you setup a virtual environment before installing these libraries):
