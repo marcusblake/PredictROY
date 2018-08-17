@@ -1,6 +1,5 @@
 #!/bin/bash
 
-sudo apt-get build-dep python-matplotlib
-sudo apt-get install python-matplotlib
-sudo apt-get install python-bs4
-sudo apt-get install python-pandas
+python3 -mpip install matplotlib numpy scipy
+pip3 install beautifulsoup4 pandas
+pip3 install --upgrade https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-0.10.0-py3-none-any.whl
