@@ -1,5 +1,5 @@
 #!/bin/bash
 
-python3 -mpip install matplotlib numpy scipy
-pip3 install beautifulsoup4 pandas
-pip3 install --upgrade https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-0.10.0-py3-none-any.whl
+pip3 install virtualenv
+virtualenv env
+source env/bin/activate

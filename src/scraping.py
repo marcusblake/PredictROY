@@ -57,9 +57,9 @@ def ROYData():
 	for row in table:
 		rookie_of_year = row.findAll('td')
 		#Want Rookie of the Year until 1980 since training dataset is from years 1980-2016
-		if rookie_of_year[0].text == '1979':
+		if rookie_of_year[0].text.encode('ascii') == '1979':
 			break
 
-		dataset.append(rookie_of_year[1].text)
+		dataset.append(rookie_of_year[1].text.encode('ascii'))
 		
 	return dataset
