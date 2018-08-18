@@ -1,19 +1,67 @@
-#Import Libraries
-import matplotlib
-matplotlib.use('TkAgg')
-
-import math
+from __future__ import print_function
 from scraping import ROYData
 from scraping import currentRookieData
+
+#Import Libraries
+import matplotlib
+#Sets environment for Matplotlib
+matplotlib.use('TkAgg')
+import math
 import matplotlib.pyplot as plt
 import pandas as pd
 import tensorflow as tf
 import numpy as np
+from sklearn import metrics
+
+
+
 
 
 
 """
-	args:
+	arg(s):
+
+	return:
+"""
+def get_feature_columns(training_features):
+
+	temp = set()
+	for column in training_features:
+		temp.add(tf.feature_column.numeric_column(column))
+
+	return temp;
+
+
+
+
+
+"""
+	arg(s):
+
+	return:
+"""
+def train_model(learning_rate, steps, batch_size, training_features, training_targets, validation_features, validation_targets):
+
+	periods = 10
+
+	steps_per_period = periods / steps
+
+	# Defining Gradient Descent Optimizer to increase runtime efficiency of algorithm.
+	gd_optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+	# Applying gradient clipping to prevent divergence during gradient descent
+	gd_optimizer = tf.contrib.estimator.clip_gradients_by_norm(gd_optimizer, 5.0)
+
+	# Create linear classifier
+	linear_classifier = tf.estimator.LinearClassifier(feature_columns=get_feature_columns(training_features), n_classes=2, optimizer=gd_optimizer)
+
+	print("yay :)")
+
+
+
+
+
+"""
+	arg(s):
 
 	return:
 """
@@ -62,9 +110,12 @@ def feature_processing(nba_historical_data):
 
 
 
+
 def target_processing(nba_historical_data):
 
 	return nba_historical_data[['ROY']]
+
+
 
 
 
@@ -73,6 +124,7 @@ def target_processing(nba_historical_data):
 	the Rookie of the Year award
 
 	arg(s): DataFrame that contains historical data of all NBA rookies from 1980-2016
+
 	return: Returns updated DataFrame that has ROY column
 """
 
@@ -91,19 +143,27 @@ def addROYBooleanColumn(nba_historical_data):
 	data = []
 
 
-	for i in range( len(nba_historical_data['Name']) ):
+	for i in range(len(nba_historical_data['Name'])):
 		if nba_historical_data['Name'][i].encode('ascii') in previous_winners_set:
 			data.append(1)
 		else:
 			data.append(0)
 
-	nba_historical_data['ROY'] = pd.Series( data )
+	nba_historical_data['ROY'] = pd.Series(data)
 
 	return nba_historical_data
 
 
 
 
+
+"""
+	This is the main driver of this model
+
+	args: None
+
+	return: None
+"""
 
 def main():
 
@@ -123,17 +183,26 @@ def main():
 
 	#Splitting training data, validation data, testing data approximately 50/25/25
 	training_features = feature_processing(nba_historical_data.iloc[:754])
-	validation_features = feature_processing(nba_historical_data.iloc[754:1131])
-	testing_features = feature_processing(nba_historical_data.iloc[1131:])
-
-
-
 	training_targets = target_processing(nba_historical_data.iloc[:754])
+
+	validation_features = feature_processing(nba_historical_data.iloc[754:1131])
 	validation_targets = target_processing(nba_historical_data.iloc[754:1131])
+
+	testing_features = feature_processing(nba_historical_data.iloc[1131:])
 	testing_targets = target_processing(nba_historical_data.iloc[1131:])
 
 
-	print( training_targets )
+
+
+	logistic_regressor = train_model(
+		learning_rate=1,  
+		steps=1, 
+		batch_size=1, 
+		training_features=training_features, 
+		training_targets=training_targets, 
+		validation_features=validation_features, 
+		validation_targets=validation_targets
+		)
 
 
 
@@ -148,6 +217,9 @@ def main():
 	# plt.scatter(sample['EFF'], sample['PTS'], color='g')
 	# plt.scatter(ROYS['EFF'], ROYS['PTS'], color='r')
 	# plt.show()
+
+
+
 
 
 if __name__ == "__main__":

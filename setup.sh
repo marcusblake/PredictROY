@@ -1,4 +1,4 @@
 #!/bin/bash
 
-pip3 install virtualenv
+pip install virtualenv
 virtualenv env
