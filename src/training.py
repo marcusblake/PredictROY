@@ -12,6 +12,7 @@ import pandas as pd
 import tensorflow as tf
 import numpy as np
 from sklearn import metrics
+# from tensorflow.python.data import Dataset
 
 
 
@@ -29,7 +30,32 @@ def get_feature_columns(training_features):
 	for column in training_features:
 		temp.add(tf.feature_column.numeric_column(column))
 
-	return temp;
+	return temp
+
+
+
+
+
+"""
+	arg(s):
+
+	return:
+"""
+def input_function(features, targets, batch_size=1, shuffle=True, num_epochs=None):
+
+	#Create numpy array of python dictionaries
+	features = {key:np.array(value) for key,value in dict(features).items()}
+
+	dataset = tf.data.Dataset.from_tensor_slices((features, targets)) ##failing
+	print('goodbye')
+	dataset = dataset.batch(batch_size).repeat(num_epochs)
+	
+	if shuffle:
+		dataset.shuffle(500)
+
+	features, labels = dataset.make_one_shot_iterator().get_next()
+
+	return features, labels
 
 
 
@@ -51,12 +77,60 @@ def train_model(learning_rate, steps, batch_size, training_features, training_ta
 	# Applying gradient clipping to prevent divergence during gradient descent
 	gd_optimizer = tf.contrib.estimator.clip_gradients_by_norm(gd_optimizer, 5.0)
 
+
 	# Create linear classifier
 	linear_classifier = tf.estimator.LinearClassifier(feature_columns=get_feature_columns(training_features), n_classes=2, optimizer=gd_optimizer)
 
-	print("yay :)")
+
+	###### DEFINE INPUT  FUNCTIONS FOR LINEAR CLASSIFIER ######
+	#Want to shuffle training data and use mini-batching for training
+	training_input_fn = lambda: input_function(training_features, training_targets['ROY'], batch_size=batch_size)
+	predict_training_input_fn = lambda: input_function(training_features, training_targets['ROY'], shuffle=False, num_epochs=1)
+	predict_validation_fn = lambda: input_function(validation_features, validation_targets['ROY'], shuffle=False, num_epochs=1)
 
 
+
+	training_log_loss = []
+	validation_log_loss = []
+
+
+
+	print("Starting training:\n")
+	for period in range(10):
+		print("Training...")
+		linear_classifier.train(input_fn=training_input_fn, steps=steps_per_period)
+
+
+		training_predictions = linear_classifier.predict(input_fn=predict_training_input_fn)
+		training_predictions = np.array([item['predictions'][0] for item in training_predictions])
+
+		validation_predictions = linear_classifier.predict(input_fn=predict_validation_fn)
+		validation_predictions = np.array([item['predictions'][0] for item in validation_predictions])
+
+		training_loss = metrics.log_loss(training_targets, training_predictions)
+		validation_loss = metrics.log_loss(validation_targets, validation_predictions)
+
+
+
+		#Add loss to array to later graph with Matplotlib
+		training_log_loss.append(training_loss)
+		validation_log_loss.append(validation_loss)
+
+		print("Training loss for period %d: %f" % (period, training_loss))
+		print("Validation loss for period %d: %f" % (period, validation_loss))
+		
+	print("Training done")
+
+
+	plt.ylabel('Log Loss')
+	plt.xlabel('Period')
+	plt.title("LogLoss vs. Periods")
+	plt.tight_layout()
+	plt.plot(training_log_loss, label='Training', c='g')
+	plt.plot(validation_log_loss, label='Validation', c='b')
+	plt.show()
+
+	return linear_classifier
 
 
 
@@ -68,39 +142,39 @@ def train_model(learning_rate, steps, batch_size, training_features, training_ta
 def feature_processing(nba_historical_data):
 
 	selected_features = nba_historical_data[
-	["MIN",
-	"PTS",
-	"FGM",
-	"FGA",
-	"FG%",
-	"3P Made",
-	"3PA",
-	"3P%",
-	"FTM",
-	"FTA",
-	"FT%",
-	"OREB",
-	"DREB",
-	"REB",
-	"AST",
-	"STL",
-	"BLK",
-	"EFF",
-	"TOV"
+	['MIN',
+	'PTS',
+	'FGM',
+	'FGA',
+	'FG%',
+	'3P Made',
+	'3PA',
+	'3P%',
+	'FTM',
+	'FTA',
+	'FT%',
+	'OREB',
+	'DREB',
+	'REB',
+	'AST',
+	'STL',
+	'BLK',
+	'EFF',
+	'TOV'
 	]]
 
 	
 	selected_features['EFF'] = ( selected_features['FGM'] * 89.910 ) + \
-								 ( selected_features['STL'] * 53.897 ) + \
-								 ( selected_features['3P Made'] * 51.757 ) + \
-								 ( selected_features['FTM'] * 46.845 ) + \
-								 ( selected_features['BLK'] * 39.190 ) + \
-								 ( selected_features['OREB'] * 39.190 ) + \
-								 ( selected_features['AST'] * 34.677 ) + \
-								 ( selected_features['DREB'] * 14.707 ) - \
-								 ( (selected_features['FTA'] - selected_features['FTM']) * 20.091 ) - \
-								 ( (selected_features['FGA'] - selected_features['FGM']) * 39.190 ) - \
-								 ( selected_features['TOV'] * 38.973 )
+								( selected_features['STL'] * 53.897 ) + \
+								( selected_features['3P Made'] * 51.757 ) + \
+								( selected_features['FTM'] * 46.845 ) + \
+								( selected_features['BLK'] * 39.190 ) + \
+								( selected_features['OREB'] * 39.190 ) + \
+								( selected_features['AST'] * 34.677 ) + \
+								( selected_features['DREB'] * 14.707 ) - \
+								( (selected_features['FTA'] - selected_features['FTM']) * 20.091 ) - \
+								( (selected_features['FGA'] - selected_features['FGM']) * 39.190 ) - \
+								( selected_features['TOV'] * 38.973 )
 
 
 	selected_features['EFF']/=selected_features['MIN']
@@ -145,9 +219,9 @@ def addROYBooleanColumn(nba_historical_data):
 
 	for i in range(len(nba_historical_data['Name'])):
 		if nba_historical_data['Name'][i].encode('ascii') in previous_winners_set:
-			data.append(1)
+			data.append(1.0)
 		else:
-			data.append(0)
+			data.append(0.0)
 
 	nba_historical_data['ROY'] = pd.Series(data)
 
@@ -168,9 +242,9 @@ def addROYBooleanColumn(nba_historical_data):
 def main():
 
 
-	nba_historical_data = pd.read_excel('https://query.data.world/s/ntr4fv2oniqbrs4b55epcyyia5x66x')
+	nba_historical_data = pd.read_excel('https://query.data.world/s/ntr4fv2oniqbrs4b55epcyyia5x66x', encoding='utf-8')
 
-
+	print('Pre-processing data')
 	# Gets rid of 2016 season data since the data in this set was collected when season wasn't complete and 
 	# statistics collected could provide false insight into ROY prediction
 	nba_historical_data = nba_historical_data.iloc[32:].reset_index()
@@ -178,7 +252,6 @@ def main():
 
 	#Randomize data
 	nba_historical_data = nba_historical_data.reindex(np.random.permutation(nba_historical_data.index))
-
 
 
 	#Splitting training data, validation data, testing data approximately 50/25/25
@@ -190,7 +263,7 @@ def main():
 
 	testing_features = feature_processing(nba_historical_data.iloc[1131:])
 	testing_targets = target_processing(nba_historical_data.iloc[1131:])
-
+	print('Done pre-processing data')
 
 
 
@@ -222,5 +295,5 @@ def main():
 
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 	main() 
