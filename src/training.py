@@ -47,7 +47,7 @@ def input_function(features, targets, batch_size=1, shuffle=True, num_epochs=Non
 	features = {key:np.array(value) for key,value in dict(features).items()}
 
 	dataset = tf.data.Dataset.from_tensor_slices((features, targets)) ##failing
-	print('goodbye')
+	
 	dataset = dataset.batch(batch_size).repeat(num_epochs)
 	
 	if shuffle:
@@ -70,7 +70,7 @@ def train_model(learning_rate, steps, batch_size, training_features, training_ta
 
 	periods = 10
 
-	steps_per_period = periods / steps
+	steps_per_period = steps / periods
 
 	# Defining Gradient Descent Optimizer to increase runtime efficiency of algorithm.
 	gd_optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
@@ -102,10 +102,10 @@ def train_model(learning_rate, steps, batch_size, training_features, training_ta
 
 
 		training_predictions = linear_classifier.predict(input_fn=predict_training_input_fn)
-		training_predictions = np.array([item['predictions'][0] for item in training_predictions])
+		training_predictions = np.array([item['probabilities'] for item in training_predictions])
 
 		validation_predictions = linear_classifier.predict(input_fn=predict_validation_fn)
-		validation_predictions = np.array([item['predictions'][0] for item in validation_predictions])
+		validation_predictions = np.array([item['probabilities'] for item in validation_predictions])
 
 		training_loss = metrics.log_loss(training_targets, training_predictions)
 		validation_loss = metrics.log_loss(validation_targets, validation_predictions)
@@ -124,10 +124,11 @@ def train_model(learning_rate, steps, batch_size, training_features, training_ta
 
 	plt.ylabel('Log Loss')
 	plt.xlabel('Period')
-	plt.title("LogLoss vs. Periods")
+	plt.title("Log Loss vs. Periods")
 	plt.tight_layout()
 	plt.plot(training_log_loss, label='Training', c='g')
 	plt.plot(validation_log_loss, label='Validation', c='b')
+	plt.legend()
 	plt.show()
 
 	return linear_classifier
@@ -146,13 +147,10 @@ def feature_processing(nba_historical_data):
 	'PTS',
 	'FGM',
 	'FGA',
-	'FG%',
-	'3P Made',
-	'3PA',
-	'3P%',
+	'FGPercent',
 	'FTM',
 	'FTA',
-	'FT%',
+	'FTPrecent',
 	'OREB',
 	'DREB',
 	'REB',
@@ -164,20 +162,19 @@ def feature_processing(nba_historical_data):
 	]]
 
 	
-	selected_features['EFF'] = ( selected_features['FGM'] * 89.910 ) + \
-								( selected_features['STL'] * 53.897 ) + \
-								( selected_features['3P Made'] * 51.757 ) + \
-								( selected_features['FTM'] * 46.845 ) + \
-								( selected_features['BLK'] * 39.190 ) + \
-								( selected_features['OREB'] * 39.190 ) + \
-								( selected_features['AST'] * 34.677 ) + \
-								( selected_features['DREB'] * 14.707 ) - \
-								( (selected_features['FTA'] - selected_features['FTM']) * 20.091 ) - \
-								( (selected_features['FGA'] - selected_features['FGM']) * 39.190 ) - \
-								( selected_features['TOV'] * 38.973 )
+	selected_features.loc[:, 'EFF'] = ( selected_features['FGM'] * 89.910 ) + \
+									( selected_features['STL'] * 53.897 ) + \
+									( selected_features['FTM'] * 46.845 ) + \
+									( selected_features['BLK'] * 39.190 ) + \
+									( selected_features['OREB'] * 39.190 ) + \
+									( selected_features['AST'] * 34.677 ) + \
+									( selected_features['DREB'] * 14.707 ) - \
+									( (selected_features['FTA'] - selected_features['FTM']) * 20.091 ) - \
+									( (selected_features['FGA'] - selected_features['FGM']) * 39.190 ) - \
+									( selected_features['TOV'] * 38.973 )
+	
 
-
-	selected_features['EFF']/=selected_features['MIN']
+	selected_features['EFF'] = selected_features['EFF'] / selected_features['MIN']
 
 	return selected_features
 
@@ -212,18 +209,17 @@ def addROYBooleanColumn(nba_historical_data):
 		previous_winners_set.add(previous_winners[i])
 
 
-
 	#contains the data of each player
 	data = []
 
 
 	for i in range(len(nba_historical_data['Name'])):
 		if nba_historical_data['Name'][i].encode('ascii') in previous_winners_set:
-			data.append(1.0)
+			data.append(1)
 		else:
-			data.append(0.0)
+			data.append(0)
 
-	nba_historical_data['ROY'] = pd.Series(data)
+	nba_historical_data = nba_historical_data.assign(ROY=data)
 
 	return nba_historical_data
 
@@ -241,13 +237,16 @@ def addROYBooleanColumn(nba_historical_data):
 
 def main():
 
-
 	nba_historical_data = pd.read_excel('https://query.data.world/s/ntr4fv2oniqbrs4b55epcyyia5x66x', encoding='utf-8')
 
 	print('Pre-processing data')
 	# Gets rid of 2016 season data since the data in this set was collected when season wasn't complete and 
 	# statistics collected could provide false insight into ROY prediction
 	nba_historical_data = nba_historical_data.iloc[32:].reset_index()
+	nba_historical_data = nba_historical_data.drop(columns=['3P Made', '3PA', '3P%'])
+	nba_historical_data = nba_historical_data.rename(index=str, columns={'FG%': 'FGPercent', 'FT%': 'FTPrecent'})
+	nba_historical_data = nba_historical_data.fillna(0)
+
 	nba_historical_data = addROYBooleanColumn(nba_historical_data)
 
 	#Randomize data
@@ -268,9 +267,9 @@ def main():
 
 
 	logistic_regressor = train_model(
-		learning_rate=1,  
-		steps=1, 
-		batch_size=1, 
+		learning_rate=.0001,  
+		steps=100, 
+		batch_size=10, 
 		training_features=training_features, 
 		training_targets=training_targets, 
 		validation_features=validation_features, 
