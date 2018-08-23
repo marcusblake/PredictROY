@@ -129,7 +129,7 @@ def train_model(learning_rate, steps, batch_size, training_features, training_ta
 	plt.plot(training_log_loss, label='Training', c='g')
 	plt.plot(validation_log_loss, label='Validation', c='b')
 	plt.legend()
-	plt.show()
+	# plt.show()
 
 	return linear_classifier
 
@@ -142,7 +142,7 @@ def train_model(learning_rate, steps, batch_size, training_features, training_ta
 """
 def feature_processing(nba_historical_data):
 
-	selected_features = nba_historical_data[
+	selected_features = nba_historical_data.loc[:,
 	['MIN',
 	'PTS',
 	'FGM',
@@ -162,19 +162,17 @@ def feature_processing(nba_historical_data):
 	]]
 
 	
-	selected_features.loc[:, 'EFF'] = ( selected_features['FGM'] * 89.910 ) + \
-									( selected_features['STL'] * 53.897 ) + \
-									( selected_features['FTM'] * 46.845 ) + \
-									( selected_features['BLK'] * 39.190 ) + \
-									( selected_features['OREB'] * 39.190 ) + \
-									( selected_features['AST'] * 34.677 ) + \
-									( selected_features['DREB'] * 14.707 ) - \
-									( (selected_features['FTA'] - selected_features['FTM']) * 20.091 ) - \
-									( (selected_features['FGA'] - selected_features['FGM']) * 39.190 ) - \
-									( selected_features['TOV'] * 38.973 )
+	selected_features.loc[:,'EFF'] = selected_features.loc[:,'PTS'] + \
+									  selected_features.loc[:,'REB'] + \
+									  selected_features.loc[:,'AST'] + \
+									  selected_features.loc[:,'STL'] + \
+									  selected_features.loc[:,'BLK'] - \
+									  ( selected_features.loc[:,'FTA'] - selected_features.loc[:,'FTM'] ) - \
+									  ( selected_features.loc[:,'FGA'] - selected_features.loc[:,'FGM'] ) - \
+									  selected_features.loc[:,'TOV']
 	
-
-	selected_features['EFF'] = selected_features['EFF'] / selected_features['MIN']
+	#Efficiency per minute
+	selected_features.loc[:,'EFF'] = selected_features.loc[:,'EFF'] / selected_features.loc[:,'MIN']
 
 	return selected_features
 
@@ -184,7 +182,7 @@ def feature_processing(nba_historical_data):
 
 def target_processing(nba_historical_data):
 
-	return nba_historical_data[['ROY']]
+	return nba_historical_data.loc[:,['ROY']]
 
 
 
@@ -253,15 +251,19 @@ def main():
 	nba_historical_data = nba_historical_data.reindex(np.random.permutation(nba_historical_data.index))
 
 
+	training_set = nba_historical_data.iloc[:754]
+	validation_set = nba_historical_data.iloc[754:1131]
+	testing_set = nba_historical_data.iloc[1131:]
+
 	#Splitting training data, validation data, testing data approximately 50/25/25
-	training_features = feature_processing(nba_historical_data.iloc[:754])
-	training_targets = target_processing(nba_historical_data.iloc[:754])
+	training_features = feature_processing(training_set)
+	training_targets = target_processing(training_set)
+	
+	validation_features = feature_processing(validation_set)
+	validation_targets = target_processing(validation_set)
 
-	validation_features = feature_processing(nba_historical_data.iloc[754:1131])
-	validation_targets = target_processing(nba_historical_data.iloc[754:1131])
-
-	testing_features = feature_processing(nba_historical_data.iloc[1131:])
-	testing_targets = target_processing(nba_historical_data.iloc[1131:])
+	testing_features = feature_processing(testing_set)
+	testing_targets = target_processing(testing_set)
 	print('Done pre-processing data')
 
 
@@ -274,9 +276,16 @@ def main():
 		training_targets=training_targets, 
 		validation_features=validation_features, 
 		validation_targets=validation_targets
-		)
+	)
 
+	predict_testing_fn = lambda: input_function(testing_features, testing_targets['ROY'], shuffle=False, num_epochs=1)
+	testing_predictions = logistic_regressor.predict(input_fn=predict_testing_fn)
+	testing_predictions = np.array([item['probabilities'] for item in testing_predictions])
+	testing_log_loss = metrics.log_loss(testing_targets, testing_predictions)
 
+	print('Loss on testing is: %f' % testing_log_loss)
+
+	plt.show()
 
 
 	# sample = nba_historical_data.sample(n=500)
