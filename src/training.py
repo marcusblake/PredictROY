@@ -38,19 +38,18 @@ def get_feature_columns(training_features):
 
 	return:
 """
-def input_function(features, targets, batch_size=1, shuffle=True, num_epochs=None):
+def input_function(features, targets):
 
+	arr = []
+
+	
 	# Create numpy array of python dictionaries
-	features = {key:np.array(value) for key,value in dict(features).items()}
+	for key, value in dict(features).items():
+		arr.append(value)
+		
 
-	dataset = tf.data.Dataset.from_tensor_slices((features, targets))
-	
-	dataset = dataset.batch(batch_size).repeat(num_epochs)
-	
-	if shuffle:
-		dataset.shuffle(500)
-
-	features, labels = dataset.make_one_shot_iterator().get_next()
+	features = np.array(arr).T
+	labels = np.array(targets['ROY'])
 
 	return features, labels
 
@@ -71,71 +70,91 @@ def input_function(features, targets, batch_size=1, shuffle=True, num_epochs=Non
 
 	return:
 """
-def train_model(learning_rate, steps, batch_size, training_features, training_targets, validation_features, validation_targets):
+def train_model(learning_rate, iteration_num, batch_size, training_features, training_targets, validation_features, validation_targets):
 
-	periods = 10
+	training_features, training_targets = input_function(training_features, training_targets)
+	validation_features, validation_targets = input_function(validation_features, validation_targets)
 
-	steps_per_period = steps / periods
-
-	# Defining Gradient Descent Optimizer to increase runtime efficiency of algorithm.
-	gd_optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
-	# Applying gradient clipping to prevent divergence during gradient descent
-	gd_optimizer = tf.contrib.estimator.clip_gradients_by_norm(gd_optimizer, 5.0)
-
-
-	# Create linear classifier
-	linear_classifier = tf.estimator.LinearClassifier(feature_columns=get_feature_columns(training_features), n_classes=2, optimizer=gd_optimizer)
-
+	ratio = 38.0 / (38.0 + 1468.0)
+	ratio = 1 - ratio
 
 	
-	# Want to shuffle training data and use mini-batching for training
-	training_input_fn = lambda: input_function(training_features, training_targets['ROY'], batch_size=batch_size)
-	predict_training_input_fn = lambda: input_function(training_features, training_targets['ROY'], shuffle=False, num_epochs=1)
-	predict_validation_fn = lambda: input_function(validation_features, validation_targets['ROY'], shuffle=False, num_epochs=1)
+	#Number of features that are used
+	n_features = 16
+
+	weights_shape = (n_features, 1)
+	bias_shape = (1, 1)
+	
+	W = tf.Variable(initial_value=tf.random_normal(weights_shape), dtype=tf.float32, name='weights')
+
+	X = tf.placeholder(dtype=tf.float32, name='features', shape=[None, n_features])
+
+	b = tf.Variable(initial_value=tf.random_normal(bias_shape), dtype=tf.float32, name='bias')
+
+	y_pred = tf.matmul(X, W) + b
+
+	y_true = tf.placeholder(dtype=tf.float32, name='labels', shape=[None, 1])
+
+	loss_function = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=y_true, logits=y_pred, pos_weight=ratio))
+
+	# Defining Gradient Descent Optimizer to increase runtime efficiency of algorithm.
+	optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(loss_function)
+
+
+	prediction = tf.round(tf.sigmoid(y_pred))
+	correct = tf.cast(tf.equal(prediction, y_true), dtype=tf.float32)
+	accuracy = tf.reduce_mean(correct)
+
+
+	training_loss = []
+	training_accuracy = []
+	validation_accuracy = []
+
+
+	with tf.Session() as sess:
+
+		sess.run(tf.global_variables_initializer())
+
+		print('Starting training:')
+		for iteration in range(iteration_num):
+
+			batch_index = np.random.choice(len(training_features), size=batch_size)
+			batch_train_X = training_features[batch_index]
+			batch_train_y = np.matrix(training_targets[batch_index]).T
 
 
 
-	training_log_loss = []
-	validation_log_loss = []
-
-
-
-	print('Starting training:')
-	for period in range(10):
-		print('Training...')
-		linear_classifier.train(input_fn=training_input_fn, steps=steps_per_period)
-
-
-		training_predictions = linear_classifier.predict(input_fn=predict_training_input_fn)
-		training_predictions = np.array([item['probabilities'] for item in training_predictions])
-
-		validation_predictions = linear_classifier.predict(input_fn=predict_validation_fn)
-		validation_predictions = np.array([item['probabilities'] for item in validation_predictions])
-
-		training_loss = metrics.log_loss(training_targets, training_predictions)
-		validation_loss = metrics.log_loss(validation_targets, validation_predictions)
-
-
-
-		# Add loss to array to later graph with Matplotlib
-		training_log_loss.append(training_loss)
-		validation_log_loss.append(validation_loss)
-
-		print('Training loss for period %d: %f' % (period+1, training_loss))
-		print('Validation loss for period %d: %f' % (period+1, validation_loss))
+			sess.run(optimizer, feed_dict={X: batch_train_X, y_true: batch_train_y})
 		
-	print('Training done')
+
+			train_acc = sess.run(accuracy, feed_dict={X: training_features, y_true: np.matrix(training_targets).T})
+			training_accuracy.append(train_acc)
+
+			test_acc = sess.run(accuracy, feed_dict={X: validation_features, y_true: np.matrix(validation_targets).T})
+			validation_accuracy.append(test_acc)
 
 
-	plt.ylabel('Log Loss')
-	plt.xlabel('Period')
-	plt.title('Log Loss vs. Periods')
+			if (iteration + 1) % 200 == 0:
+				train_loss = sess.run(loss_function, feed_dict={X: batch_train_X, y_true: batch_train_y})
+				training_loss.append(train_loss)
+
+				print('Training Loss at iteration %d: %f' % (iteration + 1, train_loss))
+				print('Training accuracy at iteration %d: %f' % (iteration + 1, train_acc))
+				print('Validation accuracy at iteration %d: %f' % (iteration + 1, test_acc))
+
+			
+			
+		print('Training done')
+		sess.close()
+
+
+	plt.ylabel('Loss')
+	plt.xlabel('Iterations')
+	plt.title('Loss vs. Iterations')
 	plt.tight_layout()
-	plt.plot(training_log_loss, label='Training', c='g')
-	plt.plot(validation_log_loss, label='Validation', c='b')
+	plt.plot(training_accuracy, label='Training', c='g')
+	plt.plot(validation_accuracy, label='Validation', c='b')
 	plt.legend()
-
-	return linear_classifier
 
 
 
@@ -289,38 +308,25 @@ def preprocess_data(nba_historical_data):
 def train(nba_historical_data):
 
 
-	training_set = nba_historical_data.iloc[:754]
-	validation_set = nba_historical_data.iloc[754:1131]
-	testing_set = nba_historical_data.iloc[1131:]
+	training_set = nba_historical_data.iloc[:1131]
+	validation_set = nba_historical_data.iloc[1131:]
 
-	# Splitting training data, validation data, testing data approximately 50/25/25
+	# Splitting training data, validation data, testing data approximately 75/25
 	training_features = feature_processing(training_set)
 	training_targets = target_processing(training_set)
 	
 	validation_features = feature_processing(validation_set)
 	validation_targets = target_processing(validation_set)
 
-	testing_features = feature_processing(testing_set)
-	testing_targets = target_processing(testing_set)
-
-
-	logistic_regressor = train_model(
-		learning_rate=.0001,  
-		steps=100, 
-		batch_size=10, 
+	train_model(
+		learning_rate=.001,  
+		iteration_num=1500,
+		batch_size=32, 
 		training_features=training_features, 
 		training_targets=training_targets, 
 		validation_features=validation_features, 
 		validation_targets=validation_targets
 	)
-
-	predict_testing_fn = lambda: input_function(testing_features, testing_targets['ROY'], shuffle=False, num_epochs=1)
-	testing_predictions = logistic_regressor.predict(input_fn=predict_testing_fn)
-	testing_predictions = np.array([item['probabilities'] for item in testing_predictions])
-	testing_log_loss = metrics.log_loss(testing_targets, testing_predictions)
-
-	print('Loss on testing is: %f' % testing_log_loss)
-
 
 	print('Generating plot')
 	plt.show()
