@@ -1,7 +1,5 @@
 from __future__ import print_function
 from scraping import ROYData
-from scraping import currentRookieData
-from sklearn import metrics
 
 #Import Libraries
 import matplotlib
@@ -38,7 +36,7 @@ def get_feature_columns(training_features):
 
 	return:
 """
-def input_function(features, targets):
+def input_function(features):
 
 	arr = []
 
@@ -49,9 +47,8 @@ def input_function(features, targets):
 		
 
 	features = np.array(arr).T
-	labels = np.array(targets['ROY'])
 
-	return features, labels
+	return features
 
 
 
@@ -70,10 +67,16 @@ def input_function(features, targets):
 
 	return:
 """
-def train_model(learning_rate, iteration_num, batch_size, training_features, training_targets, validation_features, validation_targets):
+def train_model(learning_rate, iteration_num, batch_size, training_features, training_targets, validation_features, validation_targets, current_data, players):
 
-	training_features, training_targets = input_function(training_features, training_targets)
-	validation_features, validation_targets = input_function(validation_features, validation_targets)
+	training_features = input_function(training_features)
+	training_targets = np.array(training_targets['ROY'])
+
+	validation_features = input_function(validation_features)
+	validation_targets = np.array(validation_targets['ROY'])
+
+
+	current_data = input_function(current_data)
 
 	ratio = 38.0 / (38.0 + 1468.0)
 	ratio = 1 - ratio
@@ -110,6 +113,8 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 	training_accuracy = []
 	validation_accuracy = []
 
+	results = None
+
 
 	with tf.Session() as sess:
 
@@ -143,18 +148,31 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 				print('Validation accuracy at iteration %d: %f' % (iteration + 1, test_acc))
 
 			
-			
 		print('Training done')
+
+		results = sess.run(prediction, feed_dict={X: current_data})
+
+		print(zip(players, results))
+
+		exit()
+
 		sess.close()
 
-
-	plt.ylabel('Loss')
+	### Figure showing accuracy vs iterations ###
+	plt.figure(1)
+	plt.ylabel('Accuracy')
 	plt.xlabel('Iterations')
-	plt.title('Loss vs. Iterations')
+	plt.title('Accuracy vs. Iterations')
 	plt.tight_layout()
 	plt.plot(training_accuracy, label='Training', c='g')
 	plt.plot(validation_accuracy, label='Validation', c='b')
 	plt.legend()
+
+
+	plt.figure(2)
+
+
+
 
 
 
@@ -177,7 +195,7 @@ def feature_processing(nba_historical_data):
 	'FGPercent',
 	'FTM',
 	'FTA',
-	'FTPrecent',
+	'FTPercent',
 	'OREB',
 	'DREB',
 	'REB',
@@ -199,7 +217,7 @@ def feature_processing(nba_historical_data):
 									  selected_features.loc[:,'TOV']
 	
 	# Efficiency per minute
-	selected_features.loc[:,'EFF'] = selected_features.loc[:,'EFF'] / selected_features.loc[:,'MIN']
+	# selected_features.loc[:,'EFF'] = selected_features.loc[:,'EFF'] / selected_features.loc[:,'MIN']
 
 	return selected_features
 
@@ -259,7 +277,7 @@ def addROYBooleanColumn(nba_historical_data):
 
 	return: Returns updated DataFrame
 """
-def preprocess_data(nba_historical_data):
+def preprocess_training_data(nba_historical_data):
 
 	
 
@@ -276,7 +294,7 @@ def preprocess_data(nba_historical_data):
 	nba_historical_data = nba_historical_data.drop(columns=['3P Made', '3PA', '3P%'])
 
 
-	nba_historical_data = nba_historical_data.rename(index=str, columns={'FG%': 'FGPercent', 'FT%': 'FTPrecent'})
+	nba_historical_data = nba_historical_data.rename(index=str, columns={'FG%': 'FGPercent', 'FT%': 'FTPercent'})
 	nba_historical_data = nba_historical_data.fillna(0)
 	nba_historical_data = addROYBooleanColumn(nba_historical_data)
 
@@ -295,6 +313,31 @@ def preprocess_data(nba_historical_data):
 
 
 
+def preprocess_current(current_data):
+
+	current_data = current_data[current_data.G >= 30]
+	current_data = current_data.reset_index()
+
+
+	columns=['3P', '3P.1', '3PA', 'Yrs', 'Age', 'Unnamed: 0', 'FG%', 'FT%', 'MP.1', 'PS/G','TRB.1', 'AST.1', 'PF']
+	current_data = current_data.drop(columns=columns).rename(columns={'FG': 'FGM', 'FT': 'FTM', 'ORB': 'OREB', 'TRB': 'REB', 'MP': 'MIN'})
+
+	DREB = current_data.loc[:,'REB'] - current_data.loc[:,'OREB']
+	FGPercent = (current_data.loc[:,'FGM'] / current_data.loc[:,'FGA']).round(3) * 100
+	FTPercent = (current_data.loc[:,'FTM'] / current_data.loc[:,'FTA']).round(3) * 100
+	
+
+	current_data = current_data.assign(DREB=DREB, FGPercent=FGPercent, FTPercent=FTPercent)
+
+	current_data[['MIN','FGM','FGA','FTM','FTA','OREB', 'DREB', 'REB','AST','STL','BLK','TOV','PTS']] = \
+	current_data[['MIN','FGM','FGA','FTM','FTA','OREB', 'DREB', 'REB','AST','STL','BLK','TOV','PTS']].div(current_data.G, axis=0).round(2)
+
+	return feature_processing(current_data), np.array(current_data['Player'])
+
+
+
+
+
 """
 	This method splits data into a training set, valdiation set, and testing set before
 	calling the train_model() function. It then uses the regressor returned from train_model()
@@ -305,7 +348,7 @@ def preprocess_data(nba_historical_data):
 
 	return: Done
 """
-def train(nba_historical_data):
+def train_and_predict(nba_historical_data, current_data, players):
 
 
 	training_set = nba_historical_data.iloc[:1131]
@@ -325,7 +368,9 @@ def train(nba_historical_data):
 		training_features=training_features, 
 		training_targets=training_targets, 
 		validation_features=validation_features, 
-		validation_targets=validation_targets
+		validation_targets=validation_targets,
+		current_data=current_data,
+		players=players
 	)
 
 	print('Generating plot')
