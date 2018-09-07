@@ -69,6 +69,9 @@ def input_function(features):
 """
 def train_model(learning_rate, iteration_num, batch_size, training_features, training_targets, validation_features, validation_targets, current_data, players):
 
+	#Number of features that are used
+	n_features = len(training_features.columns)
+
 	training_features = input_function(training_features)
 	training_targets = np.array(training_targets['ROY'])
 
@@ -82,8 +85,6 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 	ratio = 1 - ratio
 
 	
-	#Number of features that are used
-	n_features = 16
 
 	weights_shape = (n_features, 1)
 	bias_shape = (1, 1)
@@ -103,7 +104,7 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 	# Defining Gradient Descent Optimizer to increase runtime efficiency of algorithm.
 	optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(loss_function)
 
-
+	probabilities = tf.sigmoid(y_pred)
 	prediction = tf.round(tf.sigmoid(y_pred))
 	correct = tf.cast(tf.equal(prediction, y_true), dtype=tf.float32)
 	accuracy = tf.reduce_mean(correct)
@@ -150,11 +151,9 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 			
 		print('Training done')
 
-		results = sess.run(prediction, feed_dict={X: current_data})
-
+		results = sess.run(probabilities, feed_dict={X: current_data})
+		
 		print(zip(players, results))
-
-		exit()
 
 		sess.close()
 
@@ -164,12 +163,12 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 	plt.xlabel('Iterations')
 	plt.title('Accuracy vs. Iterations')
 	plt.tight_layout()
-	plt.plot(training_accuracy, label='Training', c='g')
+	plt.plot(training_loss, label='Training', c='g')
 	plt.plot(validation_accuracy, label='Validation', c='b')
 	plt.legend()
 
 
-	plt.figure(2)
+	# plt.figure(2)
 
 
 
@@ -188,16 +187,11 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 def feature_processing(nba_historical_data):
 
 	selected_features = nba_historical_data.loc[:,
-	['MIN',
+	['GP',
+	'MIN',
 	'PTS',
-	'FGM',
-	'FGA',
 	'FGPercent',
-	'FTM',
-	'FTA',
 	'FTPercent',
-	'OREB',
-	'DREB',
 	'REB',
 	'AST',
 	'STL',
@@ -207,17 +201,14 @@ def feature_processing(nba_historical_data):
 	]]
 
 	
-	selected_features.loc[:,'EFF'] = selected_features.loc[:,'PTS'] + \
-									  selected_features.loc[:,'REB'] + \
-									  selected_features.loc[:,'AST'] + \
-									  selected_features.loc[:,'STL'] + \
-									  selected_features.loc[:,'BLK'] - \
-									  ( selected_features.loc[:,'FTA'] - selected_features.loc[:,'FTM'] ) - \
-									  ( selected_features.loc[:,'FGA'] - selected_features.loc[:,'FGM'] ) - \
-									  selected_features.loc[:,'TOV']
-	
-	# Efficiency per minute
-	# selected_features.loc[:,'EFF'] = selected_features.loc[:,'EFF'] / selected_features.loc[:,'MIN']
+	selected_features.loc[:,'EFF'] = nba_historical_data.loc[:,'PTS'] + \
+									  nba_historical_data.loc[:,'REB'] + \
+									  nba_historical_data.loc[:,'AST'] + \
+									  nba_historical_data.loc[:,'STL'] + \
+									  nba_historical_data.loc[:,'BLK'] - \
+									  ( nba_historical_data.loc[:,'FTA'] - nba_historical_data.loc[:,'FTM'] ) - \
+									  ( nba_historical_data.loc[:,'FGA'] - nba_historical_data.loc[:,'FGM'] ) - \
+									  nba_historical_data.loc[:,'TOV']
 
 	return selected_features
 
@@ -247,7 +238,7 @@ def addROYBooleanColumn(nba_historical_data):
 	previous_winners = ROYData()
 	previous_winners_set = set()
 
-	for i in range( len(previous_winners) ):
+	for i in range(len(previous_winners)):
 		previous_winners_set.add(previous_winners[i])
 
 
@@ -284,9 +275,14 @@ def preprocess_training_data(nba_historical_data):
 	print('Pre-processing data')
 
 
+
 	# Gets rid of 2016 season data since the data in this set was collected when season wasn't complete and 
 	# statistics collected could provide false insight into ROY prediction
-	nba_historical_data = nba_historical_data.iloc[32:].reset_index()
+	nba_historical_data = nba_historical_data.iloc[32:]
+
+	nba_historical_data = nba_historical_data[nba_historical_data.GP >= 41]
+
+	nba_historical_data = nba_historical_data.reset_index()
 
 
 	# Drop 3P Statistics because this may overfit data due to the fact that the 3PT line
@@ -315,22 +311,21 @@ def preprocess_training_data(nba_historical_data):
 
 def preprocess_current(current_data):
 
-	current_data = current_data[current_data.G >= 30]
+	current_data = current_data[current_data.G >= 41]
 	current_data = current_data.reset_index()
 
 
-	columns=['3P', '3P.1', '3PA', 'Yrs', 'Age', 'Unnamed: 0', 'FG%', 'FT%', 'MP.1', 'PS/G','TRB.1', 'AST.1', 'PF']
-	current_data = current_data.drop(columns=columns).rename(columns={'FG': 'FGM', 'FT': 'FTM', 'ORB': 'OREB', 'TRB': 'REB', 'MP': 'MIN'})
+	columns=['3P', '3P.1', '3PA', 'Yrs', 'Age', 'Unnamed: 0', 'FG%', 'FT%', 'MP.1', 'PS/G','TRB.1', 'AST.1', 'PF', 'ORB']
+	current_data = current_data.drop(columns=columns).rename(columns={'FG': 'FGM', 'FT': 'FTM', 'TRB': 'REB', 'MP': 'MIN', 'G': 'GP'})
 
-	DREB = current_data.loc[:,'REB'] - current_data.loc[:,'OREB']
 	FGPercent = (current_data.loc[:,'FGM'] / current_data.loc[:,'FGA']).round(3) * 100
 	FTPercent = (current_data.loc[:,'FTM'] / current_data.loc[:,'FTA']).round(3) * 100
 	
 
-	current_data = current_data.assign(DREB=DREB, FGPercent=FGPercent, FTPercent=FTPercent)
+	current_data = current_data.assign(FGPercent=FGPercent, FTPercent=FTPercent)
 
-	current_data[['MIN','FGM','FGA','FTM','FTA','OREB', 'DREB', 'REB','AST','STL','BLK','TOV','PTS']] = \
-	current_data[['MIN','FGM','FGA','FTM','FTA','OREB', 'DREB', 'REB','AST','STL','BLK','TOV','PTS']].div(current_data.G, axis=0).round(2)
+	current_data[['MIN','FGM','FGA','FTM','FTA','REB','AST','STL','BLK','TOV','PTS']] = \
+	current_data[['MIN','FGM','FGA','FTM','FTA','REB','AST','STL','BLK','TOV','PTS']].div(current_data.GP, axis=0).round(1)
 
 	return feature_processing(current_data), np.array(current_data['Player'])
 
@@ -362,8 +357,8 @@ def train_and_predict(nba_historical_data, current_data, players):
 	validation_targets = target_processing(validation_set)
 
 	train_model(
-		learning_rate=.001,  
-		iteration_num=1500,
+		learning_rate=.01,  
+		iteration_num=3000,
 		batch_size=32, 
 		training_features=training_features, 
 		training_targets=training_targets, 
