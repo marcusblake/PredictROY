@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import tensorflow as tf
 import numpy as np
+from scraping import currentRookieData
+from random import randint
+
 
 
 
@@ -102,10 +105,10 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 	loss_function = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=y_true, logits=y_pred, pos_weight=ratio))
 
 	# Defining Gradient Descent Optimizer to increase runtime efficiency of algorithm.
-	optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(loss_function)
+	optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_function)
 
 	probabilities = tf.sigmoid(y_pred)
-	prediction = tf.round(tf.sigmoid(y_pred))
+	prediction = tf.round(probabilities)
 	correct = tf.cast(tf.equal(prediction, y_true), dtype=tf.float32)
 	accuracy = tf.reduce_mean(correct)
 
@@ -146,29 +149,46 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 
 				print('Training Loss at iteration %d: %f' % (iteration + 1, train_loss))
 				print('Training accuracy at iteration %d: %f' % (iteration + 1, train_acc))
-				print('Validation accuracy at iteration %d: %f' % (iteration + 1, test_acc))
+				print('Validation accuracy at iteration %d: %f\n' % (iteration + 1, test_acc))
 
 			
-		print('Training done')
+		print('Training done\n\n')
 
 		results = sess.run(probabilities, feed_dict={X: current_data})
 		
-		print(zip(players, results))
+		print('Rookie(s) of the Year:')
+
+		potential_winners = []
+		for player, result in zip(players, results):
+			#Decision threshold
+			if result>=0.5:
+				potential_winners.append(player)
+
+
+		length = len(potential_winners)
+		if(length == 0):
+			print('Could not make a valid prediction')
+		elif length > 2:
+			print('Many qualified candidates. Making guess on winner...')
+			# If the model predicts many qualified candidates, pick one at random
+			print(potential_winners[randint(0, length - 1)])
+		else:
+			for player in potential_winners:
+				print(player)
+				
+
+		print('\n')
 
 		sess.close()
 
 	### Figure showing accuracy vs iterations ###
-	plt.figure(1)
 	plt.ylabel('Accuracy')
 	plt.xlabel('Iterations')
 	plt.title('Accuracy vs. Iterations')
 	plt.tight_layout()
-	plt.plot(training_loss, label='Training', c='g')
+	plt.plot(training_accuracy, label='Training', c='g')
 	plt.plot(validation_accuracy, label='Validation', c='b')
 	plt.legend()
-
-
-	# plt.figure(2)
 
 
 
@@ -357,8 +377,8 @@ def train_and_predict(nba_historical_data, current_data, players):
 	validation_targets = target_processing(validation_set)
 
 	train_model(
-		learning_rate=.01,  
-		iteration_num=3000,
+		learning_rate=0.001,  
+		iteration_num=3500,
 		batch_size=32, 
 		training_features=training_features, 
 		training_targets=training_targets, 
@@ -368,5 +388,29 @@ def train_and_predict(nba_historical_data, current_data, players):
 		players=players
 	)
 
+
+
+def main():
+
+	print('Pulling data from https://query.data.world/s/ntr4fv2oniqbrs4b55epcyyia5x66x ....')
+	nba_historical_data = pd.read_excel('https://query.data.world/s/ntr4fv2oniqbrs4b55epcyyia5x66x', encoding='utf-8')
+	print('Done pulling data.')
+
+	currentRookieData()
+
+	current_data = pd.read_csv('currentRookieData.csv')
+
+
+	nba_historical_data = preprocess_training_data(nba_historical_data)
+	current_data, players = preprocess_current(current_data)
+
+	train_and_predict(nba_historical_data, current_data, players)
+
 	print('Generating plot')
 	plt.show()
+
+
+
+
+if __name__=='__main__':
+	main()
