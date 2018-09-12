@@ -13,31 +13,13 @@ from scraping import currentRookieData
 from random import randint
 
 
-
-
-
-
 """
+	This function returns a matrix of features which will be used in matrix multiplication
+
 	arg(s):
+		features -> DataFrame which contains features to be used in model
 
-	return:
-"""
-def get_feature_columns(training_features):
-
-	temp = set()
-	for column in training_features:
-		temp.add(tf.feature_column.numeric_column(column))
-
-	return temp
-
-
-
-
-
-"""
-	arg(s):
-
-	return:
+	return: numpy matrix
 """
 def input_function(features):
 
@@ -58,17 +40,22 @@ def input_function(features):
 
 
 """
+	This function is the main training method for the model. It utilizes logistic regression to make predictions
+	on the probability of an individual winning rookie of the year
+
 	arg(s):
 		learning -> float that we use for gradient descent
-		steps -> integer that is the number of steps that we take as we train
+		iteration_num -> integer that is the number of iterations we do during training
 		batch_size -> integer that is the size of mini-btaches that we will use
 		training_features -> DataFrame that contains the data of the features we will use to train the model
 		training_targets -> DataFrame that contains the data of the targets we will use to train the model
 		validation_features -> DataFrame that contains the data of the features we will use to validate the model
 		validation_targets -> DataFrame that contains the data of the targets we will use to validate the model
+		current_data -> DataFrame which contains statistics of rookies
+		players -> numpy array containing names of players
 
 
-	return:
+	return: None
 """
 def train_model(learning_rate, iteration_num, batch_size, training_features, training_targets, validation_features, validation_targets, current_data, players):
 
@@ -104,7 +91,7 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 
 	loss_function = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=y_true, logits=y_pred, pos_weight=ratio))
 
-	# Defining Gradient Descent Optimizer to increase runtime efficiency of algorithm.
+	# Defining Adam Optimizer
 	optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_function)
 
 	probabilities = tf.sigmoid(y_pred)
@@ -200,7 +187,8 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 	recalculation of player efficiency rating so that we can have a unifrom metricsthat we can
 	use when scraping new data.
 
-	arg(s): DataFrame that contains historical data of all NBA rookies from 1980-2016
+	arg(s): 
+		nba_historcial_data -> DataFrame that contains data of NBA rookies
 
 	return: DataFrame that only consists of the features that will be used in the ML model
 """
@@ -235,7 +223,14 @@ def feature_processing(nba_historical_data):
 
 
 
+"""
+	This method gets the ROY column in the nba_historical_data DataFrame
 
+	arg(s): 
+		nba_historical_data -> DataFrame that contains historical data of all NBA rookies from 1980-2016
+
+	return: Returns ROY column as a series
+"""
 def target_processing(nba_historical_data):
 	return nba_historical_data.loc[:,['ROY']]
 
@@ -247,7 +242,8 @@ def target_processing(nba_historical_data):
 	This method adds a boolean column that signfies whether a particular player has won 
 	the Rookie of the Year award
 
-	arg(s): DataFrame that contains historical data of all NBA rookies from 1980-2016
+	arg(s): 
+		nba_historical -> DataFrame that contains historical data of all NBA rookies from 1980-2016
 
 	return: Returns updated DataFrame that has ROY column
 """
@@ -284,7 +280,8 @@ def addROYBooleanColumn(nba_historical_data):
 	This method does data preprocessing to prepare the data to be input to the
 	model.
 
-	arg(s): DataFrame which contains statistics of rookies from 1980-2015
+	arg(s): 
+		nba_historical_data -> DataFrame which contains statistics of rookies from 1980-2015
 
 	return: Returns updated DataFrame
 """
@@ -328,6 +325,15 @@ def preprocess_training_data(nba_historical_data):
 
 
 
+"""
+	This method does data preprocessing to prepare the data to be input to the
+	model.
+
+	arg(s): 
+		current_data -> DataFrame which contains statistics of rookies
+
+	return: Returns updated DataFrame
+"""
 
 def preprocess_current(current_data):
 
@@ -354,14 +360,16 @@ def preprocess_current(current_data):
 
 
 """
-	This method splits data into a training set, valdiation set, and testing set before
-	calling the train_model() function. It then uses the regressor returned from train_model()
-	to predict on the testing set in order to gauge the accuracy of the model. A plot should also
-	appear showing Log Loss vs Periods
+	This method splits data into a training set and valdiation set and calls
+	the main driver function to train the model
 
-	arg(s): DataFrame which contains statistics of rookies from 1980-2015
+	arg(s): 
+		nba_historical_data -> DataFrame which contains statistics of rookies from 1980-2015
+		current_data -> DataFrame containing data on current rookies
+		players -> numpy array containing names of players
 
-	return: Done
+
+	return: None
 """
 def train_and_predict(nba_historical_data, current_data, players):
 
@@ -388,7 +396,13 @@ def train_and_predict(nba_historical_data, current_data, players):
 		players=players
 	)
 
+"""
+	This method drives the entire process of pulling necessary data, processing the data, and calling the training methods
 
+	arg(s): None
+
+	return: None
+"""
 
 def main():
 

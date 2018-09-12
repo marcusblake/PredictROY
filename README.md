@@ -1,5 +1,5 @@
 # Predict NBA Rookie of the Year using Machine Learning
-This is a personal project which involves utilizing a simple machine learning algorithm in order to predict the NBA Rookie of The Year based statistics of all rookies in any given year.
+This is a personal project which involves utilizing a simple machine learning algorithm in order to predict the NBA Rookie of The Year based on statistics of all rookies in any given year.
 
 #### Setting Up Environment
 It is highly recommended to use a virtual environment to avoid conflict with existing Python installations. You can manually setup a virtual environment or run the following commands in your terminal:
@@ -25,15 +25,10 @@ If you activate a virtual environment, you must deactivate it once you are done.
 This file does web scraping to get statistical data from the 2017-2018 NBA Season which is the year we wish to predict. This file also does web scraping to get the Rookie of the Year winners.
 
 * **training.py**
-This file contains the body for the machine learning algorithm which uses logistic regression in order to classify a player as the rookie of the year.
-
-* **main.py**
-This is the main file that you can run in order to train the model. You can run the file by doing the following.
+This file contains the body for the machine learning algorithm which uses logistic regression in order to classify a player as the rookie of the year. You can run the file by doing the following.
 ```
-python main.py
+python training.py
 ```
-
-
 
 #### Project Dependencies
 The following list contains the external libraries that I use in this project. These libraries can all be installed using the installation instructions above.
