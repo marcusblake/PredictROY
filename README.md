@@ -25,7 +25,7 @@ If you activate a virtual environment, you must deactivate it once you are done.
 This file does web scraping to get statistical data from the 2017-2018 NBA Season which is the year we wish to predict. This file also does web scraping to get the Rookie of the Year winners.
 
 * **training.py**
-This file contains the body for the machine learning algorithm which uses logistic regression in order to classify a player as the rookie of the year. You can run the file by doing the following.
+This file contains the body for the machine learning algorithm which uses Sckikit-Learn's Random Forest Classifier in order to classify a player as the rookie of the year. You can run the file by doing the following.
 ```
 python training.py
 ```
@@ -35,6 +35,5 @@ The following list contains the external libraries that I use in this project. T
 * [Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/bs4/doc/)
 * [Pandas](https://pandas.pydata.org/pandas-docs/stable/index.html)
 * [Matplotlib](https://matplotlib.org/api/index.html)
-* [Tensorflow](https://www.tensorflow.org/)
 * [Scikit-learn](http://scikit-learn.org/stable/index.html)
 * [NumPy](http://www.numpy.org/)

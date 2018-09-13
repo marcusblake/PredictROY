@@ -1,5 +1,6 @@
 from __future__ import print_function
 from scraping import ROYData
+from scraping import currentRookieData
 
 #Import Libraries
 import matplotlib
@@ -7,10 +8,11 @@ matplotlib.use('TkAgg') #Sets environment for Matplotlib
 import math
 import matplotlib.pyplot as plt
 import pandas as pd
-import tensorflow as tf
 import numpy as np
-from scraping import currentRookieData
 from random import randint
+from sklearn.metrics import classification_report
+from sklearn.metrics import accuracy_score
+from sklearn.ensemble import RandomForestClassifier
 
 
 """
@@ -25,12 +27,10 @@ def input_function(features):
 
 	arr = []
 
-	
 	# Create numpy array of python dictionaries
 	for key, value in dict(features).items():
 		arr.append(value)
 		
-
 	features = np.array(arr).T
 
 	return features
@@ -40,13 +40,10 @@ def input_function(features):
 
 
 """
-	This function is the main training method for the model. It utilizes logistic regression to make predictions
+	This function is the main training method for the model. It utilizes a random forest classifier to make predictions
 	on the probability of an individual winning rookie of the year
 
 	arg(s):
-		learning -> float that we use for gradient descent
-		iteration_num -> integer that is the number of iterations we do during training
-		batch_size -> integer that is the size of mini-btaches that we will use
 		training_features -> DataFrame that contains the data of the features we will use to train the model
 		training_targets -> DataFrame that contains the data of the targets we will use to train the model
 		validation_features -> DataFrame that contains the data of the features we will use to validate the model
@@ -57,7 +54,7 @@ def input_function(features):
 
 	return: None
 """
-def train_model(learning_rate, iteration_num, batch_size, training_features, training_targets, validation_features, validation_targets, current_data, players):
+def train_model(training_features, training_targets, validation_features, validation_targets, current_data, players):
 
 	#Number of features that are used
 	n_features = len(training_features.columns)
@@ -69,112 +66,92 @@ def train_model(learning_rate, iteration_num, batch_size, training_features, tra
 	validation_targets = np.array(validation_targets['ROY'])
 
 
+
+	#to be used later for plotting
+	ppg = current_data['PTS']
+	eff = current_data['EFF']
+
+
+
 	current_data = input_function(current_data)
 
-	ratio = 38.0 / (38.0 + 1468.0)
-	ratio = 1 - ratio
 
-	
+	# Defines classifier
+	rfc = RandomForestClassifier()
 
-	weights_shape = (n_features, 1)
-	bias_shape = (1, 1)
-	
-	W = tf.Variable(initial_value=tf.random_normal(weights_shape), dtype=tf.float32, name='weights')
-
-	X = tf.placeholder(dtype=tf.float32, name='features', shape=[None, n_features])
-
-	b = tf.Variable(initial_value=tf.random_normal(bias_shape), dtype=tf.float32, name='bias')
-
-	y_pred = tf.matmul(X, W) + b
-
-	y_true = tf.placeholder(dtype=tf.float32, name='labels', shape=[None, 1])
-
-	loss_function = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=y_true, logits=y_pred, pos_weight=ratio))
-
-	# Defining Adam Optimizer
-	optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_function)
-
-	probabilities = tf.sigmoid(y_pred)
-	prediction = tf.round(probabilities)
-	correct = tf.cast(tf.equal(prediction, y_true), dtype=tf.float32)
-	accuracy = tf.reduce_mean(correct)
-
-
-	training_loss = []
-	training_accuracy = []
-	validation_accuracy = []
-
-	results = None
-
-
-	with tf.Session() as sess:
-
-		sess.run(tf.global_variables_initializer())
-
-		print('Starting training:')
-		for iteration in range(iteration_num):
-
-			batch_index = np.random.choice(len(training_features), size=batch_size)
-			batch_train_X = training_features[batch_index]
-			batch_train_y = np.matrix(training_targets[batch_index]).T
+	# trains model
+	rfc.fit(training_features, training_targets)
 
 
 
-			sess.run(optimizer, feed_dict={X: batch_train_X, y_true: batch_train_y})
+	print('Classification report on training data')
+	predictions = rfc.predict(training_features)
+	print(classification_report(training_targets,predictions, target_names=['Class 0', 'Class 1']))
+	training_accuracy = accuracy_score(training_targets, predictions)
+
+
+
+	print('Classification report on validation data')
+	predictions = rfc.predict(validation_features)
+	print(classification_report(validation_targets,predictions, target_names=['Class 0', 'Class 1']))
+	validation_accuracy = accuracy_score(validation_targets, predictions)
+
+
+
+
+	print('Training accuracy: ', (training_accuracy*100).round(2) )
+	print('Validation accuracy: ', (validation_accuracy*100).round(2) )
+
+
+	# predict on new data
+	results = rfc.predict(current_data)
 		
+	print('Rookie of the Year:')
 
-			train_acc = sess.run(accuracy, feed_dict={X: training_features, y_true: np.matrix(training_targets).T})
-			training_accuracy.append(train_acc)
+	potential_winners = []
+	for player, result in zip(players, results):
+		#Decision threshold
+		if result==1:
+			potential_winners.append(player)
 
-			test_acc = sess.run(accuracy, feed_dict={X: validation_features, y_true: np.matrix(validation_targets).T})
-			validation_accuracy.append(test_acc)
 
 
-			if (iteration + 1) % 200 == 0:
-				train_loss = sess.run(loss_function, feed_dict={X: batch_train_X, y_true: batch_train_y})
-				training_loss.append(train_loss)
+	length = len(potential_winners)
+	winner = None
 
-				print('Training Loss at iteration %d: %f' % (iteration + 1, train_loss))
-				print('Training accuracy at iteration %d: %f' % (iteration + 1, train_acc))
-				print('Validation accuracy at iteration %d: %f\n' % (iteration + 1, test_acc))
-
-			
-		print('Training done\n\n')
-
-		results = sess.run(probabilities, feed_dict={X: current_data})
-		
-		print('Rookie(s) of the Year:')
-
-		potential_winners = []
+	if(length == 0):
+		### If it can't predict a definitive winner, it will choose the person with the highest probability
+		results = rfc.predict_proba(current_data)
+		max_prob = 0
 		for player, result in zip(players, results):
-			#Decision threshold
-			if result>=0.5:
-				potential_winners.append(player)
+			if result[1] > max_prob:
+				max_prob = result[1]
+				winner = player
+		print(winner)
+	### If it predicts that multiple people are likely to win, it will choose at random
+	elif length > 1:
+		winner = potential_winners[randint(0, length - 1)]
+		print(winner)
+	else:
+		winner = potential_winners[0]
+		print(winner)
 
 
-		length = len(potential_winners)
-		if(length == 0):
-			print('Could not make a valid prediction')
-		elif length > 2:
-			print('Many qualified candidates. Making guess on winner...')
-			# If the model predicts many qualified candidates, pick one at random
-			print(potential_winners[randint(0, length - 1)])
-		else:
-			for player in potential_winners:
-				print(player)
-				
+	for index in range(len(current_data)):
+		if players[index] == winner:
+			winner_ppg = ppg.iat[index]
+			winner_eff = eff.iat[index]
+			break
 
-		print('\n')
 
-		sess.close()
 
-	### Figure showing accuracy vs iterations ###
-	plt.ylabel('Accuracy')
-	plt.xlabel('Iterations')
-	plt.title('Accuracy vs. Iterations')
+	### Figure showing PPG vs. EFF to make some sense as to why the model predicted the particular person ###
+	plt.ylabel('PPG')
+	plt.xlabel('EFF')
+	plt.title('Points per game vs. Efficiency')
 	plt.tight_layout()
-	plt.plot(training_accuracy, label='Training', c='g')
-	plt.plot(validation_accuracy, label='Validation', c='b')
+	plt.scatter(eff, ppg, label='Other players', c='b')
+	plt.scatter(winner_eff, winner_ppg, label='Rookie of the Year', c='r')
 	plt.legend()
 
 
@@ -254,16 +231,16 @@ def addROYBooleanColumn(nba_historical_data):
 	previous_winners = ROYData()
 	previous_winners_set = set()
 
-	for i in range(len(previous_winners)):
-		previous_winners_set.add(previous_winners[i])
+	for prev_winner in previous_winners:
+		previous_winners_set.add(prev_winner)
 
 
 	# Contains the data of each player
 	data = []
 
 
-	for i in range(len(nba_historical_data['Name'])):
-		if nba_historical_data['Name'][i].encode('ascii') in previous_winners_set:
+	for name in nba_historical_data['Name']:
+		if name.encode('ascii') in previous_winners_set:
 			data.append(1)
 		else:
 			data.append(0)
@@ -384,10 +361,7 @@ def train_and_predict(nba_historical_data, current_data, players):
 	validation_features = feature_processing(validation_set)
 	validation_targets = target_processing(validation_set)
 
-	train_model(
-		learning_rate=0.001,  
-		iteration_num=3500,
-		batch_size=32, 
+	train_model( 
 		training_features=training_features, 
 		training_targets=training_targets, 
 		validation_features=validation_features, 
