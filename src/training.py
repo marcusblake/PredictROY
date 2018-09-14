@@ -26,13 +26,10 @@ from sklearn.ensemble import RandomForestClassifier
 def input_function(features):
 
 	arr = []
-
 	# Create numpy array of python dictionaries
 	for key, value in dict(features).items():
 		arr.append(value)
-		
 	features = np.array(arr).T
-
 	return features
 
 
@@ -56,9 +53,6 @@ def input_function(features):
 """
 def train_model(training_features, training_targets, validation_features, validation_targets, current_data, players):
 
-	#Number of features that are used
-	n_features = len(training_features.columns)
-
 	training_features = input_function(training_features)
 	training_targets = np.array(training_targets['ROY'])
 
@@ -66,12 +60,9 @@ def train_model(training_features, training_targets, validation_features, valida
 	validation_targets = np.array(validation_targets['ROY'])
 
 
-
 	#to be used later for plotting
 	ppg = current_data['PTS']
 	eff = current_data['EFF']
-
-
 
 	current_data = input_function(current_data)
 
@@ -81,7 +72,6 @@ def train_model(training_features, training_targets, validation_features, valida
 
 	# trains model
 	rfc.fit(training_features, training_targets)
-
 
 
 	print('Classification report on training data')
@@ -95,10 +85,6 @@ def train_model(training_features, training_targets, validation_features, valida
 	predictions = rfc.predict(validation_features)
 	print(classification_report(validation_targets,predictions, target_names=['Class 0', 'Class 1']))
 	validation_accuracy = accuracy_score(validation_targets, predictions)
-
-
-
-
 	print('Training accuracy: ', (training_accuracy*100).round(2) )
 	print('Validation accuracy: ', (validation_accuracy*100).round(2) )
 
@@ -187,13 +173,13 @@ def feature_processing(nba_historical_data):
 
 	
 	selected_features.loc[:,'EFF'] = nba_historical_data.loc[:,'PTS'] + \
-									  nba_historical_data.loc[:,'REB'] + \
-									  nba_historical_data.loc[:,'AST'] + \
-									  nba_historical_data.loc[:,'STL'] + \
-									  nba_historical_data.loc[:,'BLK'] - \
-									  ( nba_historical_data.loc[:,'FTA'] - nba_historical_data.loc[:,'FTM'] ) - \
-									  ( nba_historical_data.loc[:,'FGA'] - nba_historical_data.loc[:,'FGM'] ) - \
-									  nba_historical_data.loc[:,'TOV']
+					 nba_historical_data.loc[:,'REB'] + \
+					 nba_historical_data.loc[:,'AST'] + \
+					 nba_historical_data.loc[:,'STL'] + \
+					 nba_historical_data.loc[:,'BLK'] - \
+					 ( nba_historical_data.loc[:,'FTA'] - nba_historical_data.loc[:,'FTM'] ) - \
+					 ( nba_historical_data.loc[:,'FGA'] - nba_historical_data.loc[:,'FGM'] ) - \
+					 nba_historical_data.loc[:,'TOV']
 
 	return selected_features
 
@@ -234,17 +220,14 @@ def addROYBooleanColumn(nba_historical_data):
 	for prev_winner in previous_winners:
 		previous_winners_set.add(prev_winner)
 
-
 	# Contains the data of each player
 	data = []
-
-
 	for name in nba_historical_data['Name']:
 		if name.encode('ascii') in previous_winners_set:
 			data.append(1)
 		else:
 			data.append(0)
-
+			
 	nba_historical_data = nba_historical_data.assign(ROY=data)
 
 	return nba_historical_data
@@ -273,9 +256,7 @@ def preprocess_training_data(nba_historical_data):
 	# Gets rid of 2016 season data since the data in this set was collected when season wasn't complete and 
 	# statistics collected could provide false insight into ROY prediction
 	nba_historical_data = nba_historical_data.iloc[32:]
-
 	nba_historical_data = nba_historical_data[nba_historical_data.GP >= 41]
-
 	nba_historical_data = nba_historical_data.reset_index()
 
 
@@ -283,19 +264,13 @@ def preprocess_training_data(nba_historical_data):
 	# was introduced in 1979 and not many players in early 80s shot 3 Pointers
 	nba_historical_data = nba_historical_data.drop(columns=['3P Made', '3PA', '3P%'])
 
-
 	nba_historical_data = nba_historical_data.rename(index=str, columns={'FG%': 'FGPercent', 'FT%': 'FTPercent'})
 	nba_historical_data = nba_historical_data.fillna(0)
 	nba_historical_data = addROYBooleanColumn(nba_historical_data)
 
 	# Randomize data
 	nba_historical_data = nba_historical_data.reindex(np.random.permutation(nba_historical_data.index))
-
-
-
 	print('Done pre-processing data')
-
-
 
 	return nba_historical_data
 
@@ -349,8 +324,6 @@ def preprocess_current(current_data):
 	return: None
 """
 def train_and_predict(nba_historical_data, current_data, players):
-
-
 	training_set = nba_historical_data.iloc[:1131]
 	validation_set = nba_historical_data.iloc[1131:]
 
@@ -385,15 +358,11 @@ def main():
 	print('Done pulling data.')
 
 	currentRookieData()
-
 	current_data = pd.read_csv('currentRookieData.csv')
-
-
 	nba_historical_data = preprocess_training_data(nba_historical_data)
 	current_data, players = preprocess_current(current_data)
 
 	train_and_predict(nba_historical_data, current_data, players)
-
 	print('Generating plot')
 	plt.show()
 
